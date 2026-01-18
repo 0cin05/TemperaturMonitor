@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+    <!-- Background (now full-bleed, starts at 0,0) -->
+    <rect x="0" y="0" width="1024" height="1024" rx="228" fill="#0B1220"/>
+
+    <!-- Everything else is the same design, just uniformly scaled up -->
+    <!-- Scale factor: 1024/896 = 1.142857..., applied after translating (-64,-64) -->
+    <g transform="translate(-64 -64) scale(1.1428571428571428)">
+
+        <!-- Accent frame -->
+        <rect x="160" y="160" width="704" height="704" rx="160"
+              fill="none" stroke="#2DF3FF" stroke-width="18" opacity="0.22"/>
+
+        <!-- Monitor -->
+        <rect x="260" y="300" width="504" height="330" rx="56"
+              fill="none" stroke="#2DF3FF" stroke-width="34" stroke-linejoin="round"/>
+
+        <!-- Screen -->
+        <rect x="310" y="350" width="404" height="230" rx="38"
+              fill="none" stroke="#2DF3FF" stroke-width="18" opacity="0.75"/>
+
+        <!-- Stand -->
+        <path d="M460 680 H564" stroke="#2DF3FF" stroke-width="34" stroke-linecap="round"/>
+        <path d="M512 630 V720" stroke="#2DF3FF" stroke-width="34" stroke-linecap="round"/>
+        <path d="M410 750 H614" stroke="#2DF3FF" stroke-width="34" stroke-linecap="round"/>
+
+        <!-- Terminal prompt: >_ -->
+        <path d="M382 445 L432 475 L382 505" fill="none" stroke="#FFFFFF" stroke-width="34"
+              stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M460 520 H560" fill="none" stroke="#FFFFFF" stroke-width="34" stroke-linecap="round"/>
+
+    </g>
+</svg>

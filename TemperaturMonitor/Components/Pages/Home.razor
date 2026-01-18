@@ -1,0 +1,340 @@
+﻿@page "/"
+@implements IDisposable
+@using LibreHardwareMonitor.Hardware;
+@using TemperaturMonitor.Views
+
+<link rel="stylesheet" href="css/app.css" />
+
+@if (_initError is not null)
+{
+    <p style="color:#ef4444">@_initError</p>
+}
+else if (!_isReady)
+{
+    <p style="color:#9aa7bd">Initialisiere Sensoren…</p>
+}
+
+<button class="btn" @onclick="() => Reset()">Reset</button>
+
+<div class="grid">
+    <Card
+        Title="CPU"
+        Temp="_cpuTemp"
+        MaxTemp="_maxCpuTemp"
+        Points="_cpuPoints"
+        Load="_cpuLoad"
+        FanRPM="_cpuFanRpm"
+        ShowTemp="true"
+        ShowLoad="true"
+        ShowRPM="true">
+    </Card>
+    
+    <Card
+        Title="GPU"
+        Temp="_gpuTemp"
+        MaxTemp="_maxGpuTemp"
+        Points="_gpuPoints"
+        Load="_gpuLoad"
+        FanRPM="_gpuFanRpm"
+        ShowTemp="true"
+        ShowLoad="true"
+        ShowRPM="true">
+    </Card>
+
+    <Card
+        Title="SSD 1"
+        Temp="_ssd1Temp"
+        MaxTemp="_maxSsd1Temp"
+        Points="_ssd1Points"
+        ShowTemp="true">
+    </Card>
+
+    <Card
+        Title="SSD 2"
+        Temp="_ssd2Temp"
+        MaxTemp="_maxSsd2Temp"
+        Points="_ssd2Points"
+        ShowTemp="true">
+    </Card>    
+    
+    <LowerCard
+        Title="RAM"
+        Load="_ramLoad">
+    </LowerCard>
+</div>
+
+@code{
+    private Computer? _computer;
+    
+    float _cpuTemp;
+    float _gpuTemp;
+    float _ssd1Temp;
+    float _ssd2Temp;
+    
+    private float _cpuLoad;
+    private float _gpuLoad;
+    private float _ramLoad;
+    
+    double _maxCpuTemp;
+    double _maxGpuTemp;
+    double _maxSsd1Temp;
+    double _maxSsd2Temp;
+
+    private float _cpuFanRpm;
+    private float _gpuFanRpm;
+
+    private readonly List<(DateTime t, float v)> _cpuPoints = new();
+    private readonly List<(DateTime t, float v)> _gpuPoints = new();
+    private readonly List<(DateTime t, float v)> _ssd1Points = new();
+    private readonly List<(DateTime t, float v)> _ssd2Points = new();
+    
+    private readonly Dictionary<string, int> _storageIndexById = new(); // Hardware.Identifier -> Index
+    private int _nextStorageIndex;
+    
+    
+    private CancellationTokenSource? _cts;
+    private bool _isReady;
+    private string? _initError;
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _computer = new Computer
+            {
+                IsCpuEnabled = true,
+                IsGpuEnabled = true,
+                IsMemoryEnabled = true,
+                IsMotherboardEnabled = true,
+                IsStorageEnabled = true,
+            };
+            
+            Console.WriteLine(typeof(Computer).Assembly.Location);
+            Console.WriteLine(typeof(Computer).Assembly.FullName);
+
+            await Task.Run(() =>
+            {
+                _computer.Open();
+                foreach (var hw in _computer.Hardware)
+                {
+                    if (hw.HardwareType is HardwareType.Cpu or HardwareType.GpuAmd or HardwareType.Memory or HardwareType.Storage)
+                        UpdateRecursive(hw);
+                }
+            });
+            
+            _isReady = true;
+            await InvokeAsync(StateHasChanged);
+
+            _cts = new CancellationTokenSource();
+            _ = PollTempsAsync(_cts.Token); // fire-and-forget sauber
+        }
+        catch (Exception ex)
+        {
+            _initError = ex.ToString();
+            await InvokeAsync(StateHasChanged);
+        }
+        
+    }
+    
+    private async Task PollTempsAsync(CancellationToken token)
+    {
+        while (!token.IsCancellationRequested)
+        {
+            GetData();
+            await InvokeAsync(StateHasChanged);
+            await Task.Delay(1000, token);
+        }
+    }
+
+    private void GetData()
+    {
+        if (_computer == null) return;
+
+        foreach (var hw in _computer.Hardware)
+            UpdateRecursive(hw);
+        
+        PushPoint(_cpuPoints, _cpuTemp);
+        PushPoint(_gpuPoints, _gpuTemp);
+        PushPoint(_ssd1Points, _ssd1Temp);
+        PushPoint(_ssd2Points, _ssd2Temp);
+    }
+
+    private void UpdateRecursive(IHardware hw)
+    {
+        hw.Update();
+    
+        // CPU Temps + Load (CPU HW)
+        if (hw.HardwareType == HardwareType.Cpu)
+        {
+            foreach (var sensor in hw.Sensors)
+            {
+                if (sensor.SensorType == SensorType.Temperature &&
+                    sensor.Name == "Core Average" &&
+                    sensor.Value.HasValue)
+                {
+                    _cpuTemp = sensor.Value.Value;
+                    if (_cpuTemp > _maxCpuTemp) _maxCpuTemp = _cpuTemp;
+                }
+
+                if (sensor.SensorType == SensorType.Load &&
+                    sensor.Value.HasValue &&
+                    (sensor.Name.Contains("CPU Total", StringComparison.OrdinalIgnoreCase) ||
+                    sensor.Name.Equals("Total", StringComparison.OrdinalIgnoreCase)))
+                {
+                    _cpuLoad = sensor.Value.Value;
+                }
+            }
+        }
+
+        // GPU Temps + Load + Fan (GPU HW)
+        if (hw.HardwareType is HardwareType.GpuAmd or HardwareType.GpuNvidia or HardwareType.GpuIntel)
+        {
+            // Temp: erster Temp-Sensor
+            foreach (var sensor in hw.Sensors)
+            {
+                if (sensor.SensorType == SensorType.Temperature && sensor.Value.HasValue)
+                {
+                    _gpuTemp = sensor.Value.Value;
+                    if (_gpuTemp > _maxGpuTemp) _maxGpuTemp = _gpuTemp;
+                    break;
+                }
+            }
+
+            // Load: separat
+            foreach (var sensor in hw.Sensors)
+            {
+                if (sensor.SensorType == SensorType.Load && sensor.Value.HasValue)
+                {
+                    if (sensor.Name.Contains("GPU", StringComparison.OrdinalIgnoreCase) ||
+                        sensor.Name.Contains("Core", StringComparison.OrdinalIgnoreCase) ||
+                        sensor.Name.Contains("Total", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _gpuLoad = sensor.Value.Value;
+                        break;
+                    }
+                }
+            }
+
+            // Fan RPM
+            foreach (var sensor in hw.Sensors)
+            {
+                if (sensor.SensorType == SensorType.Fan && sensor.Value.HasValue)
+                {
+                    _gpuFanRpm = sensor.Value.Value;
+                    break;
+                }
+            }
+        }
+
+        // RAM Load (Memory HW)
+        if (hw.HardwareType == HardwareType.Memory)
+        {
+            foreach (var sensor in hw.Sensors)
+            {
+                if (sensor.SensorType == SensorType.Load && sensor.Value.HasValue)
+                {
+                    _ramLoad = sensor.Value.Value;
+                    break;
+                }
+            }
+        }
+
+        // CPU Fan: kommt fast immer über SuperIO (SubHardware)
+        if (hw.HardwareType == HardwareType.SuperIO || hw.HardwareType == HardwareType.Motherboard)
+        {
+            foreach (var sensor in hw.Sensors)
+            {
+                if (sensor.SensorType == SensorType.Fan && sensor.Value.HasValue)
+                {
+                    // Bei dir: Fan1 = CPU Fan
+                    if (sensor.Name.Equals("Fan #1", StringComparison.OrdinalIgnoreCase) ||
+                        sensor.Name.Equals("Fan 1", StringComparison.OrdinalIgnoreCase) ||
+                        sensor.Name.Contains("Fan #1", StringComparison.OrdinalIgnoreCase) ||
+                        sensor.Name.Contains("Fan 1", StringComparison.OrdinalIgnoreCase))
+                    {
+                        _cpuFanRpm = sensor.Value.Value;
+                        break;
+                    }
+                }
+            }
+        }
+        
+        // SSD Temps
+        if (hw.HardwareType == HardwareType.Storage)
+        {
+            var id = hw.Identifier.ToString();
+
+            if (!_storageIndexById.TryGetValue(id, out int idx))
+            {
+                idx = _nextStorageIndex++;
+                _storageIndexById[id] = idx;
+            }
+
+            var tempSensor = hw.Sensors.FirstOrDefault(s =>
+                s.SensorType == SensorType.Temperature &&
+                s.Value.HasValue &&
+                (s.Name.Equals("Temperature", StringComparison.OrdinalIgnoreCase) ||
+                 s.Name.Contains("Temperature", StringComparison.OrdinalIgnoreCase) ||
+                 s.Name.Contains("Drive", StringComparison.OrdinalIgnoreCase)));
+
+            if (tempSensor?.Value is { } temp)
+            {
+                if (idx == 0)
+                {
+                    _ssd1Temp = temp;
+                    if (_ssd1Temp > _maxSsd1Temp) _maxSsd1Temp = _ssd1Temp;
+                }
+                else if (idx == 1)
+                {
+                    _ssd2Temp = temp;
+                    if (_ssd2Temp > _maxSsd2Temp) _maxSsd2Temp = _ssd2Temp;
+                }
+            }
+        }
+
+        // WICHTIG: SubHardware rekursiv!
+        foreach (var sub in hw.SubHardware)
+            UpdateRecursive(sub);
+    }
+
+    public void Reset()
+    {
+        _maxCpuTemp = 0;
+        _maxGpuTemp = 0;
+        _maxSsd1Temp = 0;
+        _maxSsd2Temp = 0;
+        _cpuPoints.Clear();
+        _gpuPoints.Clear();
+        _ssd1Points.Clear();
+        _ssd2Points.Clear();
+    }
+
+    private static void PushPoint(List<(DateTime t, float v)> series, float value)
+    {
+        var now = DateTime.Now;
+        series.Add((now, value));
+
+        var cutoff = now.AddMinutes(-1);
+        int removeCount = 0;
+        while (removeCount < series.Count && series[removeCount].t < cutoff)
+            removeCount++;
+        
+        if(removeCount > 0)
+            series.RemoveRange(0, removeCount);
+    }
+    
+    public void Dispose()
+    {
+        try { _cts?.Cancel(); }
+        catch
+        {
+            // ignored
+        }
+
+        _cts?.Dispose();
+        try { _computer?.Close(); }
+        catch
+        {
+            // ignored
+        }
+    }
+}

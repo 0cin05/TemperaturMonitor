@@ -1,0 +1,112 @@
+@using TemperaturMonitor.Services
+@inject IColorService ColorService
+@inject IClampService ClampService
+
+<div class="card">
+    <div class="titleRow">
+        <span>@Title</span>
+        <span class="sub">@Temp.ToString("0.0") °C</span>
+    </div>
+
+    @if (ShowTemp)
+    {
+        <div class="donut" style="--p:@Percent; --ring:@ColorService.TempToColor(Temp);">
+            <div class="hole">
+                <div class="big">@Temp.ToString("0")°</div>
+                <div class="small">Max: @MaxTemp.ToString("0")°</div>
+            </div>
+        </div>
+
+        <div class="miniChart">
+            <div class="miniChartInner">
+                <svg viewBox="0 0 100 34" preserveAspectRatio="none">
+                    <line x1="0" y1="2" x2="100" y2="2" class="grid" />
+                    <line x1="0" y1="17" x2="100" y2="17" class="grid" />
+                    <line x1="0" y1="32" x2="100" y2="32" class="grid" />
+
+                    <polyline points="@BuildPolyline(Points, 0, 100)" class="line" />
+                </svg>
+
+                <div class="yAxis">
+                    <span>100°</span>
+                    <span>50°</span>
+                    <span>0°</span>
+                </div>
+            </div>
+
+            <div class="miniChartFooter">
+                <span class="left">last 60s</span>
+            </div>
+        </div>
+    }
+    
+    @if (ShowLoad)
+    {
+        <div class="loadRow">
+            <span class="loadLabel">Load</span>
+            <div class="loadBar"
+                 role="progressbar"
+                 aria-valuenow="@LoadPercent"
+                 aria-valuemin="0"
+                 aria-valuemax="100">
+                <div class="loadFill"
+                     style="width:@LoadPercent%; background:@ColorService.LoadToColor(Load);">
+                </div>
+            </div>
+            <span class="loadValue">@Load.ToString("0")%</span>
+        </div>
+    }
+    
+    @if (ShowRPM)
+    {
+        <div class="rpmRow">
+            <span class="rpmLabel">Fan</span>
+            <span class="rpmValue">@FanRPM.ToString("0") RPM</span>
+        </div> 
+    }
+</div>
+
+
+@code{
+    
+    [Parameter] public string Title { get; set; } = "";
+    [Parameter] public float Temp { get; set; }
+    [Parameter] public double MaxTemp { get; set; }
+    [Parameter] public List<(DateTime t, float v)> Points { get; set; } = new();
+    [Parameter] public float Load { get; set; }
+    [Parameter] public float FanRPM { get; set; }
+    
+    [Parameter] public bool ShowTemp { get; set; }
+    [Parameter] public bool ShowLoad { get; set; }
+    [Parameter] public bool ShowRPM { get; set; }
+    
+    private const double MaxScaleTemp = 100.0;
+    private int Percent => (int)ClampService.Clamp((Temp / MaxScaleTemp) * 100.0, 0, 100);
+    private int LoadPercent => (int)ClampService.Clamp(Load, 0, 100);
+    
+    
+    private string BuildPolyline(List<(DateTime t, float v)> series, float minT, float maxT)
+    {
+        if (series.Count < 2) return "";
+
+        int n = series.Count;
+        var pts = new System.Text.StringBuilder();
+
+        for (int i = 0; i < n; i++)
+        {
+            float x = (n == 1) ? 0 : (i * 100f / (n - 1));
+
+            float v = ClampService.Clamp(series[i].v, minT, maxT);
+            float y = 30f - ((v - minT) / (maxT - minT)) * 30f; // 0..30
+
+            if (i > 0) pts.Append(' ');
+            pts.Append(x.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+            pts.Append(',');
+            pts.Append(y.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        return pts.ToString();
+    }
+
+}
+
