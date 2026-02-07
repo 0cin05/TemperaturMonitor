@@ -1,6 +1,6 @@
 ﻿@page "/"
 @implements IDisposable
-@using LibreHardwareMonitor.Hardware;
+@using OpenHardwareMonitor.Hardware
 @using TemperaturMonitor.Services
 @using TemperaturMonitor.Views
 @inject IDataService DataService
@@ -112,11 +112,10 @@ else if (!_isReady)
 
             await Task.Run(() =>
             {
-                _computer.Open();
+                _computer.Open(false);
                 foreach (var hw in _computer.Hardware)
                 {
-                    if (hw.HardwareType is HardwareType.Cpu or HardwareType.GpuAmd or HardwareType.Memory or HardwareType.Storage)
-                        UpdateRecursive(hw);
+                    UpdateRecursive(hw);
                 }
             });
             
@@ -176,7 +175,7 @@ else if (!_isReady)
             _cpuFanRpm = DataService.GetMainboardData(hw);
         }
 
-        if (hw.HardwareType is HardwareType.GpuAmd or HardwareType.GpuNvidia or HardwareType.GpuIntel)
+        if (hw.HardwareType is HardwareType.GpuNvidia or HardwareType.GpuAmd)
         {
             var data = DataService.GetGpuData(hw);
             _gpuTemp = data.temp;
@@ -188,7 +187,7 @@ else if (!_isReady)
         }
 
         // RAM Load (Memory HW)
-        if (hw.HardwareType == HardwareType.Memory)
+        if (hw.HardwareType == HardwareType.Storage)
         {
             var data = DataService.GetRamData(hw);
             if (data > 0)

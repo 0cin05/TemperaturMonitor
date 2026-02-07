@@ -55,20 +55,12 @@
         <PackageReference Include="Microsoft.AspNetCore.Components.WebView.Maui" Version="$(MauiVersion)"/>
         <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="9.0.0"/>
     </ItemGroup>
-
+    
     <ItemGroup>
-      <Reference Include="LibreHardwareMonitorLib">
-        <HintPath>..\..\LibreHardwareMonitor\bin\Debug\x64\net9.0-windows\LibreHardwareMonitorLib.dll</HintPath>
-      </Reference>
-    </ItemGroup>
-
-    <ItemGroup>
-        <PackageReference Include="System.Threading.AccessControl" Version="10.0.0" />
-        <PackageReference Include="System.Management" Version="10.0.1" />
+        <PackageReference Include="OpenHardwareMonitorLib" Version="1.0.9513" />
+        <PackageReference Include="System.Threading.AccessControl" Version="10.0.2" />
+        <PackageReference Include="System.Management" Version="10.0.2" />
         <PackageReference Include="DiskInfoToolkit" Version="1.1.2" />
         <PackageReference Include="RAMSPDToolkit-NDD" Version="1.4.2" />
     </ItemGroup>
-
-
-
 </Project>

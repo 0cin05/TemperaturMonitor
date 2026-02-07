@@ -1,4 +1,4 @@
-﻿using LibreHardwareMonitor.Hardware;
+﻿using OpenHardwareMonitor.Hardware;
 
 namespace TemperaturMonitor.Services;
 
@@ -115,7 +115,8 @@ public class DataService : IDataService
     float _ssd2Temp;
     public (float Ssd1Temp, float Ssd2Temp) GetStorageData(IHardware hw)
     {
-        
+        if (!IsLikelyNvme(hw))
+            return (_ssd1Temp, _ssd2Temp);
         
         var id = hw.Identifier.ToString();
 
@@ -145,5 +146,24 @@ public class DataService : IDataService
         }
         
         return  (_ssd1Temp, _ssd2Temp);
+    }
+    
+    private static bool IsLikelyNvme(IHardware hw)
+    {
+        var haystack = (hw.Name + " " + hw.Identifier).ToLowerInvariant();
+
+        if (haystack.Contains("nvme")) return true;
+
+        // Manche Libs/Drives erwähnen es in Sensor-Namen
+        if (hw.Sensors.Any(s => (s.Name ?? "").Contains("nvme", StringComparison.OrdinalIgnoreCase)))
+            return true;
+
+        // Fallback: manche OHM-Forks nennen NVMe-Temps anders, z.B. "Composite"
+        if (hw.Sensors.Any(s => s.SensorType == SensorType.Temperature &&
+                                (s.Name.Contains("composite", StringComparison.OrdinalIgnoreCase) ||
+                                 s.Name.Contains("drive temperature", StringComparison.OrdinalIgnoreCase))))
+            return true;
+
+        return false;
     }
 }

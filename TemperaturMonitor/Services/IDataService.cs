@@ -1,4 +1,4 @@
-﻿using LibreHardwareMonitor.Hardware;
+﻿using OpenHardwareMonitor.Hardware;
 
 namespace TemperaturMonitor.Services;
 
