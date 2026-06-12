@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+
+      - name: Install MAUI workload
+        run: dotnet workload install maui-windows
+
+      - name: Publish
+        run: >
+          dotnet publish TemperaturMonitor/TemperaturMonitor.csproj
+          -f net9.0-windows10.0.19041.0
+          -c Release
+          -r win-x64
+          --self-contained true
+          -o ./publish
+
+      - name: Build installer
+        run: iscc installer/setup.iss /DAppVersion=${{ github.ref_name }}
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: installer/Output/TemperaturMonitor-${{ github.ref_name }}-setup.exe
